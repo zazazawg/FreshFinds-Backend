@@ -1,18 +1,13 @@
-import mongoose, { Schema } from "mongoose";
 import jwt from "jsonwebtoken";
+import mongoose, { Schema } from "mongoose";
+
 const userSchema = new Schema(
   {
-    userId: {
-      type: String,
-      required: true,
-    }, // Firebase auth userId
+    userId: { type: String, required: true }, // Firebase auth userId
 
     displayName: {
       type: String,
       required: true,
-    },
-    photoURL: {
-      type: String,
     },
     email: {
       type: String,
@@ -24,6 +19,7 @@ const userSchema = new Schema(
       enum: ["user", "vendor", "admin"],
       default: "user",
     },
+    photoURL: { type: String },
     refreshToken: {
       type: String,
     },
@@ -32,6 +28,7 @@ const userSchema = new Schema(
         productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
       },
     ],
+
     orders: [
       {
         orderId: { type: String, required: true },
@@ -59,7 +56,7 @@ const userSchema = new Schema(
 userSchema.methods.generateAccessToken = function () {
   return jwt.sign(
     {
-      _Id: this.userId,
+      userId: this.userId,
       email: this.email,
       role: this.role,
       displayName: this.displayName,
@@ -81,6 +78,5 @@ userSchema.methods.generateRefreshToken = function () {
     }
   );
 };
-
 const User = mongoose.model("User", userSchema);
 export default User;

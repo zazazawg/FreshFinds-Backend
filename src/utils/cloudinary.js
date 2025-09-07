@@ -1,5 +1,6 @@
 import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
+import path from "path";
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -7,26 +8,53 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const uploadOnCloudinary = async (localFilePath) => {
+/**
+ * Upload a file to Cloudinary
+ * @param {string} localFilePath
+ * @param {string|null} customPublicId
+ * @returns {Promise<{url: string, optimizedUrl: string}|null>}
+ */
+const uploadOnCloudinary = async (localFilePath, customPublicId = null) => {
   try {
-    if (!localFilePath) return null;
+    if (!localFilePath) {
+      throw new Error("No file provided for upload");
+    }
+
+    // Generate unique public_id if not provided
+    const fileName = path.basename(localFilePath, path.extname(localFilePath));
+    const publicId = customPublicId || `uploads/${Date.now()}-${fileName}`;
+
+    // Upload file to Cloudinary
     const uploadResult = await cloudinary.uploader.upload(localFilePath, {
       resource_type: "image",
-      public_id: "freshfinds",
+      public_id: publicId,
     });
-    console.log("Uploaded File URL:", uploadResult.secure_url);
-    const optimizeUrl = cloudinary.url("freshfinds", {
+    // Generate optimized Cloudinary URL
+    const optimizedUrl = cloudinary.url(publicId, {
       fetch_format: "auto",
       quality: "auto",
     });
-    console.log("Optimized URL:", optimizeUrl);
-    fs.unlinkSync(localFilePath);
-    return uploadResult;
+    // Delete the local file after upload
+    fs.unlink(localFilePath, (err) => {
+      if (err) console.error(" Error deleting temp file:", err);
+      // else console.log("Temp file deleted:", localFilePath);
+    });
+    return {
+      url: uploadResult.secure_url,
+      optimizedUrl,
+    };
   } catch (error) {
     console.error("Cloudinary Upload Error:", error.message);
+
+    // Cleanup: Delete the local file in case of error
     if (fs.existsSync(localFilePath)) {
-      fs.unlinkSync(localFilePath);
+      try {
+        fs.unlinkSync(localFilePath);
+      } catch (unlinkError) {
+        console.error("Error cleaning up temp file:", unlinkError);
+      }
     }
+
     return null;
   }
 };
