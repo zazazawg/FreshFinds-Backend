@@ -3,51 +3,112 @@ import ApiRes from "../utils/ApiRes.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import uploadOnCloudinary from "../utils/cloudinary.js";
 import ApiErr from "../utils/ApiErr.js";
+import {
+  accessCookieOptions,
+  refreshCookieOptions,
+} from "../config/cookies.js";
 
-const registerUser = asyncHandler(async (req, res) => {
-  const { userId, displayName, email, photoURL } = req.body;
-  console.log("Received data:", email, displayName, photoURL);
-  // Step 1: Validate required fields
-  if (!userId || !displayName || !email) {
-    throw new ApiErr("Missing required fields", 400);
+const generateAccessAndRefreshToken = async (userId) => {
+  try {
+    const user = await User.findById(userId);
+    const accessToken = user.generateAccessToken();
+    const refreshToken = user.generateRefreshToken();
+    user.refreshToken = refreshToken;
+    await user.save({ validateBeforeSave: false });
+    return { accessToken, refreshToken };
+  } catch (err) {
+    throw new ApiErr("Error generating tokens", 500);
   }
-  // Step 2: Check if the user already exists by email
+};
+// Register User (Sign-Up)
+const registerUser = asyncHandler(async (req, res) => {
+  const firebaseUser = req.firebaseUser; // ✅ comes from middleware
+  const userId = firebaseUser.uid;       // Trusted value
+  const email = firebaseUser.email;      // Trusted value
+
+  const { displayName } = req.body;      // Safe additional field
+  console.log("Secure Firebase data:", firebaseUser);
+
+  if (!displayName) {
+    throw new ApiErr("Display name is required", 400);
+  }
+
   const userExists = await User.findOne({ email });
   if (userExists) {
     throw new ApiErr("User already exists", 409);
   }
-  // Step 3: Handle the image upload if photoURL is provided
+
   let uploadedImageURL = null;
-  const imageLocalPath = req.file ? req.file.path : null;
-  if (imageLocalPath) {
-    try {
-      const result = await uploadOnCloudinary(imageLocalPath);
-      if (result) {
-        uploadedImageURL = result.url;
-      } else {
-        throw new ApiErr("Error uploading image to Cloudinary", 500);
-      }
-    } catch (error) {
-      // Clean up local file in case of failure
-      throw new ApiErr("Error uploading image", 500);
-    }
+  if (req.file) {
+    const result = await uploadOnCloudinary(req.file.path);
+    uploadedImageURL = result.url;
   }
-  // Step 4: Create the new user in the database
+
   const newUser = await User.create({
     userId,
-    displayName,
     email,
-    photoURL: uploadedImageURL || null,
+    displayName,
+    photoURL: uploadedImageURL,
     role: "user",
   });
+
+  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(newUser._id);
+
+  res.cookie("accessToken", accessToken, accessCookieOptions);
+  res.cookie("refreshToken", refreshToken, refreshCookieOptions);
+
   const createdUser = await User.findById(newUser._id).select("-refreshToken");
-  if (createdUser) {
-    return res
-      .status(201)
-      .json(new ApiRes(201, createdUser, "User created successfully"));
-  } else {
-    throw new ApiErr("Error creating user", 500);
-  }
+
+  return res.status(201).json(
+    new ApiRes(201, { user: createdUser, accessToken }, "User registered successfully")
+  );
 });
 
-export { registerUser };
+
+
+// Login User (Sign-In)
+const loginUser = asyncHandler(async (req, res) => {
+  const { userId } = req.body;
+  console.log("Request body:", req.body);
+
+  // Step 1: Validate if userId exists
+  if (!userId) {
+    throw new ApiErr("Firebase userId is required", 400);
+  }
+
+  // Step 2: Check if the user exists in DB
+  const user = await User.findOne({ userId });
+  if (!user) {
+    throw new ApiErr("User not found", 404); // If user doesn't exist, throw error
+  }
+
+  // Step 3: Generate access and refresh tokens
+  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
+
+  // Step 4: Set tokens in cookies
+  res.cookie("accessToken", accessToken, accessCookieOptions);
+  res.cookie("refreshToken", refreshToken, refreshCookieOptions);
+
+  // Step 5: Return logged-in user data without refreshToken
+  const loggedInUser = await User.findById(user._id).select("-refreshToken");
+
+  return res.status(200).json(
+    new ApiRes(
+      200,
+      {
+        user: loggedInUser,
+        accessToken, // Return access token if needed
+      },
+      "User logged in successfully"
+    )
+  );
+});
+
+const logoutUser = asyncHandler (async (req, res) => {
+  res.clearCookie("accessToken", accessCookieOptions);
+  res.clearCookie("refreshToken", refreshCookieOptions);
+  return res.status(200).json(new ApiRes(200, {}, "User logged out successfully"));
+});
+
+
+export { registerUser, loginUser, logoutUser };

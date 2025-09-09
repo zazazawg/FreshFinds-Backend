@@ -53,6 +53,7 @@ web_modules/
 
 # Optional eslint cache
 .eslintcache
+serviceAccountKey.json
 
 # Optional stylelint cache
 .stylelintcache
