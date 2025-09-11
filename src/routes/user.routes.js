@@ -7,12 +7,10 @@ const router = Router();
 
 // Sign up
 router.post("/signup",verifyFirebaseToken, upload.single("photoURL"), registerUser);
-
 // Sign in
 router.post("/signin",verifyFirebaseToken, loginUser);
 // sign out
 router.post("/signout",logoutUser);
-
 router.get("/profile", verifyFirebaseToken, (req, res) => {
   res.status(200).json({
     message: "Protected route accessed successfully",

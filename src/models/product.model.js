@@ -3,9 +3,9 @@ import mongooseAggregatePaginate from "mongoose-aggregate-paginate-v2";
 
 const productSchema = new Schema(
   {
-    publisher: {
+    vendorId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Vendor", // Reference to the Vendor model
+      ref: "User", 
       required: true,
     },
     name: {
@@ -16,7 +16,7 @@ const productSchema = new Schema(
       type: String,
       required: true,
     },
-    image: {
+    productImage: {
       type: String,
       required: true,
     },
@@ -24,7 +24,7 @@ const productSchema = new Schema(
       type: Number,
       required: true,
     },
-    quantityAvailable: {
+    stock: {
       type: Number,
       required: true,
       min: [0, "Quantity cannot be less than 0"],
@@ -49,6 +49,8 @@ const productSchema = new Schema(
   },
   { timestamps: true }
 );
+
+// Plugin to handle aggregate pagination (good for large data sets)
 productSchema.plugin(mongooseAggregatePaginate);
 
 const Product = mongoose.model("Product", productSchema);

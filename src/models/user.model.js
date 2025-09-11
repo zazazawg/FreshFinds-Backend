@@ -48,6 +48,9 @@ const userSchema = new Schema(
         deliveryDate: { type: Date },
       },
     ],
+    banned: { type: Boolean, default: false }, // Track if the user is banned
+    banReason: { type: String }, // Optional: Track the reason for the ban
+    banDate: { type: Date }, // Optional: Track the date the user was banned
   },
   {
     timestamps: true,
