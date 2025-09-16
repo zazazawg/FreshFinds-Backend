@@ -22,7 +22,6 @@ const fileFilter = (req, file, cb) => {
     cb(new Error("Only .jpg, .jpeg, and .png files are allowed."), false);
   }
 };
-
 // Set up the multer upload configuration with size limit and file filter
 export const upload = multer({
   storage,
