@@ -1,6 +1,9 @@
 // controllers/vendorController.js
 import User from "../models/user.model.js";
 import Vendor from "../models/vendor.model.js";
+import ApiErr from "../utils/ApiErr.js";
+import ApiRes from "../utils/ApiRes.js";
+import asyncHandler from "../utils/asyncHandler.js";
 import uploadOnCloudinary from "../utils/cloudinary.js";
 
 // Apply for vendor
@@ -80,6 +83,50 @@ const applyVendor = async (req, res) => {
     res.status(500).json({ message: "Error submitting vendor application" });
   }
 };
+// get all vendor applications
+const getAllVendorApplications = asyncHandler(async (req, res) => {
+  try {
+    // Fetch all vendor applications and populate all relevant vendor details
+    const vendorApplications = await Vendor.find()
+      .populate(
+        "vendorId",
+        "vendorName vendorEmail vendorPhone businessName marketLocation marketDescription businessCoverImage"
+      ) // Populate full vendor details
+      .sort({ applicationDate: -1 }); // Sort applications by date (newest first)
+
+    res.status(200).json({
+      message: "Vendor applications fetched successfully",
+      data: vendorApplications,
+    });
+  } catch (error) {
+    console.error("Error fetching vendor applications:", error);
+    res.status(500).json({
+      message: "Error fetching vendor applications",
+    });
+  }
+});
+// get vendor applications(pending)
+const getVendorApplications = asyncHandler(async (req, res) => {
+  try {
+    // Fetch all vendor applications with 'pending' applicationStatus and populate relevant vendor details
+    const vendorApplications = await Vendor.find({ applicationStatus: "pending" }) // Filter by 'pending' application status
+      .populate(
+        "vendorId",
+        "vendorName vendorEmail vendorPhone businessName marketLocation marketDescription businessCoverImage"
+      ) // Populate full vendor details
+      .sort({ applicationDate: -1 }); // Sort applications by date (newest first)
+
+    res.status(200).json({
+      message: "Vendor applications fetched successfully",
+      data: vendorApplications,
+    });
+  } catch (error) {
+    console.error("Error fetching vendor applications:", error);
+    res.status(500).json({
+      message: "Error fetching vendor applications",
+    });
+  }
+});
 // handle vendor application
 export const handleVendorApplication = async (req, res) => {
   const { applicationId, action } = req.body;
@@ -99,8 +146,8 @@ export const handleVendorApplication = async (req, res) => {
     await user.save();
   } else if (action === "reject") {
     vendorApplication.applicationStatus = "rejected";
-  }
 
+  }
   // Save the updated application
   await vendorApplication.save();
 
@@ -108,24 +155,11 @@ export const handleVendorApplication = async (req, res) => {
     .status(200)
     .json({ message: "Vendor application updated successfully" });
 };
-// get vendor applications
-const getVendorApplications = async (req, res) => {
-  try {
-    const vendorApplications = await Vendor.find();
-    res.status(200).json(vendorApplications);
-  } catch (error) {
-    console.error("Error fetching vendor applications:", error);
-    res.status(500).json({ message: "Error fetching vendor applications" });
-  }
-};
-// accept vendor application
-const acceptVendorApplication = async (req, res) => {};
-// reject vendor application
-const rejectVendorApplication = async (req, res) => {};
+
+
 
 export {
   applyVendor,
-  acceptVendorApplication,
-  rejectVendorApplication,
+  getAllVendorApplications,
   getVendorApplications,
 };

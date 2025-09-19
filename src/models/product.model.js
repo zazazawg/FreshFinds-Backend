@@ -5,7 +5,7 @@ const productSchema = new Schema(
   {
     vendorId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User", 
+      ref: "User",
       required: true,
     },
     name: {
@@ -33,7 +33,12 @@ const productSchema = new Schema(
       type: String,
       required: true,
     },
-    status: {
+    applicationStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
+    },
+    availabilityStatus: {
       type: String,
       enum: ["active", "out of stock"],
       default: "active",
