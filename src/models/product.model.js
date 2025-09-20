@@ -8,6 +8,8 @@ const productSchema = new Schema(
       ref: "User",
       required: true,
     },
+    vendorName: { type: String, required: true },
+    vendorEmail: { type: String, required: true },
     name: {
       type: String,
       required: true,
