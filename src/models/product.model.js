@@ -26,6 +26,12 @@ const productSchema = new Schema(
       type: Number,
       required: true,
     },
+    priceHistory: [
+      {
+        price: { type: Number, required: true },
+        date: { type: Date, default: Date.now },
+      },
+    ],
     stock: {
       type: Number,
       required: true,
@@ -57,7 +63,6 @@ const productSchema = new Schema(
   { timestamps: true }
 );
 
-// Plugin to handle aggregate pagination (good for large data sets)
 productSchema.plugin(mongooseAggregatePaginate);
 
 const Product = mongoose.model("Product", productSchema);

@@ -104,5 +104,193 @@ const approveOrRejectProduct = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiRes(200, product, "Product updated successfully"));
 });
+// Get all products for a specific vendor
+const getVendorProducts = asyncHandler(async (req, res) => {
+  // Authorization header format: "Bearer <firebaseUserId>"
+  const authHeader = req.headers.authorization;
 
-export { addProduct, approveOrRejectProduct, getPendingProducts };
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res
+      .status(400)
+      .json({ message: "Firebase UID is missing or invalid" });
+  }
+
+  const firebaseUid = authHeader.split(" ")[1]; // Extract Firebase UID
+
+  // Find user (vendor) by Firebase UID
+  const user = await User.findOne({ userId: firebaseUid });
+
+  if (!user) {
+    return res.status(404).json({ message: "Vendor not found" });
+  }
+
+  // Fetch vendor products associated with the vendorId
+  const products = await Product.find({ vendorId: user._id }).sort({
+    createdAt: -1,
+  });
+
+  if (!products || products.length === 0) {
+    return res
+      .status(404)
+      .json({ message: "No products found for this vendor" });
+  }
+
+  res.status(200).json({
+    message: "Products fetched successfully",
+    data: products,
+  });
+});
+
+// get only approved product from specific vendor
+const getApprovedProducts = asyncHandler(async (req, res) => {
+  // Get Firebase UID from Authorization header
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res
+      .status(400)
+      .json({ message: "Firebase UID is missing or invalid" });
+  }
+
+  const firebaseUid = authHeader.split(" ")[1];
+
+  // Find the vendor by Firebase UID
+  const user = await User.findOne({ userId: firebaseUid });
+
+  if (!user) {
+    return res.status(404).json({ message: "Vendor not found" });
+  }
+
+  // Fetch approved products for this vendor
+  const products = await Product.find({
+    vendorId: user._id,
+    applicationStatus: "approved",
+  }).sort({ createdAt: -1 });
+
+  if (!products || products.length === 0) {
+    return res.status(200).json({
+      message: "No approved products found",
+      data: [],
+    });
+  }
+  res.status(200).json({
+    message: "Approved products fetched successfully",
+    data: products,
+  });
+});
+// update product price
+ const updateProductPrice = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const { price } = req.body;
+
+  // Find the product
+  const product = await Product.findById(productId);
+
+  if (!product) {
+    return res.status(404).json({ message: "Product not found" });
+  }
+
+  // Update price
+  product.price = price;
+
+  await product.save();
+
+  res.status(200).json({
+    message: "Product price updated successfully",
+    data: product,
+  });
+});
+// Mark product as out of stock
+ const markProductOutOfStock = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+
+  // Find the product
+  const product = await Product.findById(productId);
+
+  if (!product) {
+    return res.status(404).json({ message: "Product not found" });
+  }
+
+  // Mark the product as out of stock
+  product.availabilityStatus = "out of stock";
+
+  await product.save();
+
+  res.status(200).json({
+    message: "Product marked as out of stock",
+    data: product,
+  });
+});
+// Delete product
+ const deleteProduct = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+
+  // Find and delete the product
+  const product = await Product.findByIdAndDelete(productId);
+
+  if (!product) {
+    return res.status(404).json({ message: "Product not found" });
+  }
+
+  res.status(200).json({
+    message: "Product deleted successfully",
+  });
+});
+
+
+
+const updateProductDetails = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const { name, description, price, stock, category } = req.body;
+  if (!name || !description || !price || !stock || !category) {
+    throw new ApiErr("All fields are required", 400);
+  }
+  const product = await Product.findById(productId);
+  if (!product) {
+    throw new ApiErr("Product not found", 404);
+  }
+
+  const previousPrice = product.price;
+  const priceHistoryEntry = {
+    price: previousPrice,
+    changedAt: Date.now(),
+  };
+
+  // Handle the image upload if a new product image is provided
+  let uploadedImageURL = product.productImage; // Keep existing image if none is uploaded
+  if (req.file) {
+    const result = await uploadOnCloudinary(req.file?.path); // Upload image to Cloudinary
+    if (result) {
+      uploadedImageURL = result.url;
+    }
+  }
+  // Update product details
+  product.name = name;
+  product.description = description;
+  product.price = price;
+  product.stock = stock;
+  product.category = category;
+  product.productImage = uploadedImageURL;
+
+  // Add the old price to the price history
+  product.priceHistory.push(priceHistoryEntry);
+
+  // Save the updated product
+  await product.save();
+  res.status(200).json({
+    message: "Product updated successfully",
+    data: product,
+  });
+});
+
+export {
+  addProduct,
+  approveOrRejectProduct,
+  getPendingProducts,
+  updateProductDetails,
+  getVendorProducts,
+  getApprovedProducts,
+  updateProductPrice,
+  markProductOutOfStock,
+  deleteProduct
+};
