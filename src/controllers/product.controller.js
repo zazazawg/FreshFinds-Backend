@@ -8,56 +8,76 @@ import uploadOnCloudinary from "../utils/cloudinary.js";
 const addProduct = asyncHandler(async (req, res) => {
   const { name, description, price, stock, category, vendorId } = req.body;
 
+  // Basic required field validation
   if (!name || !description || !price || !stock || !category || !vendorId) {
     throw new ApiErr("All fields are required", 400);
   }
+
+  // Parse numeric fields
+  const priceNum = parseFloat(price);
+  const stockNum = parseInt(stock, 10);
+
+  if (Number.isNaN(priceNum) || priceNum < 0) {
+    throw new ApiErr("Price must be a non-negative number", 400);
+  }
+  if (Number.isNaN(stockNum) || stockNum < 0) {
+    throw new ApiErr("Stock must be a non-negative integer", 400);
+  }
+
+  // Find vendor by firebase userId stored in user.userId
   const vendor = await User.findOne({ userId: vendorId });
-  console.log(vendor);
   if (!vendor) {
     throw new ApiErr("Vendor not found", 404);
   }
 
-  if (vendor.role !== "vendor") {
+  // Only vendors (and optionally admins) may add products
+  if (vendor.role !== "vendor" && vendor.role !== "admin") {
     throw new ApiErr("Only vendors can add products", 403);
   }
 
-  // Handle the image upload only if everything is valid
+  // Handle file upload (optional)
   let uploadedImageURL = null;
-  let result = null;
+  let uploadedImagePublicId = null;
 
   if (req.file) {
     try {
-      result = await uploadOnCloudinary(req.file?.path);
-      if (result) {
-        uploadedImageURL = result.url;
+      const result = await uploadOnCloudinary(req.file.path);
+      if (!result) {
+        // uploadOnCloudinary returns null on failure
+        throw new ApiErr("Image upload failed", 500);
       }
-    } catch (error) {
-      console.log("Error uploading image:", error);
-      return res.status(500).json({ message: "Error uploading image" });
+      // prefer optimizedUrl if available
+      uploadedImageURL = result.optimizedUrl || result.url || result.secure_url || null;
+      uploadedImagePublicId = result.publicId || result.public_id || null;
+    } catch (uploadErr) {
+      console.error("Error uploading image:", uploadErr);
+      throw new ApiErr("Error uploading image", 500);
     }
   }
+
   try {
-    // Create the new product with status "pending"
     const newProduct = await Product.create({
       vendorId: vendor._id,
       vendorName: vendor.displayName,
       vendorEmail: vendor.email,
-      name,
-      description,
-      price,
-      stock,
+      name: name.trim(),
+      description: description.trim(),
+      price: priceNum,
+      stock: stockNum,
       category,
       productImage: uploadedImageURL,
+      productImagePublicId: uploadedImagePublicId,
       applicationStatus: "pending",
+      // add other defaults if needed (availabilityStatus, tags, etc.)
     });
-    await newProduct.save();
 
-    res.status(201).json(new ApiRes(201, newProduct));
-  } catch (error) {
-    console.error("Error adding product:", error);
-    res.status(500).json(new ApiRes(500, null, "Error adding product"));
+    return res.status(201).json(new ApiRes(201, newProduct, "Product created successfully"));
+  } catch (err) {
+    console.error("Error adding product:", err);
+    throw new ApiErr("Error adding product", 500);
   }
 });
+
 const getPendingProducts = asyncHandler(async (req, res) => {
   try {
     const products = await Product.find({ applicationStatus: "pending" });
@@ -178,30 +198,68 @@ const getApprovedProducts = asyncHandler(async (req, res) => {
     data: products,
   });
 });
-// update product price
- const updateProductPrice = asyncHandler(async (req, res) => {
+// Update Product Price
+const updateProductPrice = asyncHandler(async (req, res) => {
+  const firebaseUid = req.headers.authorization?.split(" ")[1];
   const { productId } = req.params;
   const { price } = req.body;
 
-  // Find the product
-  const product = await Product.findById(productId);
+  if (!firebaseUid) {
+    return res
+      .status(400)
+      .json({ message: "Firebase userId required in headers" });
+  }
 
+  if (!price || price < 0) {
+    return res.status(400).json({ message: "Invalid price value" });
+  }
+
+  // Find the vendor
+  const vendor = await User.findOne({ userId: firebaseUid });
+  if (!vendor) {
+    return res.status(404).json({ message: "Vendor not found" });
+  }
+
+  // Find the product and verify ownership
+  const product = await Product.findById(productId);
   if (!product) {
     return res.status(404).json({ message: "Product not found" });
   }
 
-  // Update price
+  // Verify if the logged-in vendor owns the product
+  if (product.vendorId.toString() !== vendor._id.toString()) {
+    return res
+      .status(403)
+      .json({ message: "You do not have permission to update this product" });
+  }
+
+  // Store the current price in the priceHistory array before updating
+  const currentPrice = product.price;
+  const priceEntry = {
+    price: currentPrice,
+    date: new Date(),
+  };
+
+  if (!product.priceHistory) {
+    product.priceHistory = [];
+  }
+
+  // Push the current price to the price history
+  product.priceHistory.push(priceEntry);
+
+  // Update the product's price
   product.price = price;
 
+  // Save the updated product
   await product.save();
 
-  res.status(200).json({
+  return res.status(200).json({
     message: "Product price updated successfully",
     data: product,
   });
 });
 // Mark product as out of stock
- const markProductOutOfStock = asyncHandler(async (req, res) => {
+const markProductOutOfStock = asyncHandler(async (req, res) => {
   const { productId } = req.params;
 
   // Find the product
@@ -221,23 +279,42 @@ const getApprovedProducts = asyncHandler(async (req, res) => {
     data: product,
   });
 });
-// Delete product
- const deleteProduct = asyncHandler(async (req, res) => {
+// mark product as in stock
+const markProductActive = asyncHandler(async (req, res) => {
   const { productId } = req.params;
 
-  // Find and delete the product
-  const product = await Product.findByIdAndDelete(productId);
-
+  const product = await Product.findById(productId);
   if (!product) {
     return res.status(404).json({ message: "Product not found" });
   }
 
+  product.availabilityStatus = "active";
+  await product.save();
+
+  return res.status(200).json({
+    message: "Product marked as active",
+    data: product,
+  });
+});
+// Delete a product
+const deleteProduct = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+
+  // Find and delete product
+  const product = await Product.findByIdAndDelete(productId);
+
+  if (!product) {
+    return res.status(404).json({
+      success: false,
+      message: "Product not found",
+    });
+  }
+
   res.status(200).json({
+    success: true,
     message: "Product deleted successfully",
   });
 });
-
-
 
 const updateProductDetails = asyncHandler(async (req, res) => {
   const { productId } = req.params;
@@ -282,6 +359,53 @@ const updateProductDetails = asyncHandler(async (req, res) => {
     data: product,
   });
 });
+const getAllProducts = asyncHandler(async (req, res) => {
+  const { category, page = 1, limit } = req.query; // <-- added defaults for page
+
+  const filter = { applicationStatus: "approved" };
+
+  if (category) {
+    filter.category = category;
+  }
+
+  const numericLimit = limit ? Number(limit) : null;
+
+  const skip = numericLimit ? (Number(page) - 1) * numericLimit : 0;
+
+  let query = Product.find(filter).sort({ createdAt: -1 }); 
+
+  if (numericLimit) {
+    query = query.skip(skip).limit(numericLimit);
+  }
+
+  const products = await query;
+  const total = await Product.countDocuments(filter);
+
+  res.status(200).json({
+    message: "Approved products fetched successfully",
+    data: products,
+    total,
+    currentPage: Number(page),
+    totalPages: numericLimit ? Math.ceil(total / numericLimit) : 1, 
+  });
+});
+const getProductById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const product = await Product.findById(id);
+
+  if (!product) {
+    res.status(404);
+    throw new Error("Product not found");
+  }
+
+  res.status(200).json({
+    message: "Product fetched successfully",
+    data: product,
+  });
+});
+
+
 
 export {
   addProduct,
@@ -292,5 +416,8 @@ export {
   getApprovedProducts,
   updateProductPrice,
   markProductOutOfStock,
-  deleteProduct
+  deleteProduct,
+  markProductActive,
+  getAllProducts,
+  getProductById
 };
