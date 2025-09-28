@@ -45,7 +45,6 @@ const userSchema = new Schema(
           default: "pending",
         },
         orderDate: { type: Date, default: Date.now },
-        deliveryDate: { type: Date },
       },
     ],
     banned: { type: Boolean, default: false }, // Track if the user is banned
