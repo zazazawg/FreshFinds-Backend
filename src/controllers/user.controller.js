@@ -254,6 +254,66 @@ const getUserProfile = asyncHandler(async (req, res) => {
 };
 
 
+// admin controllers
+
+// Get users
+ const getUsers = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 10, search = "" } = req.query;
+
+  const query = {
+    $or: [
+      { email: { $regex: search, $options: "i" } },
+      { displayName: { $regex: search, $options: "i" } },
+    ],
+  };
+
+  const total = await User.countDocuments(query);
+  const users = await User.find(query)
+    .sort({ createdAt: -1 })
+    .skip((page - 1) * limit)
+    .limit(Number(limit));
+
+  res.json({
+    message: "Users fetched successfully",
+    data: users,
+    total,
+    currentPage: Number(page),
+    totalPages: Math.ceil(total / limit),
+  });
+});
+
+// Change user role
+ const updateUserRole = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { role } = req.body; // user, vendor, admin
+
+  const user = await User.findOne({userId: id});
+  if (!user) return res.status(404).json({ message: "User not found" });
+
+  user.role = role;
+  await user.save();
+
+  res.json({ message: "User role updated", data: user });
+});
+
+// Ban / Unban user
+ const banUser = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { ban, reason } = req.body;
+
+  const user = await User.findOne({userId: id});
+  if (!user) return res.status(404).json({ message: "User not found" });
+
+  user.banned = ban;
+  user.banReason = ban ? reason : "";
+  user.banDate = ban ? new Date() : null;
+
+  await user.save();
+
+  res.json({ message: `User ${ban ? "banned" : "unbanned"}`, data: user });
+});
+
+
 
 export {
   registerUser,
@@ -263,5 +323,8 @@ export {
   createPaymentIntent,
   getUserOrders,
   getUserProfile,
-  updateUserProfile
+  updateUserProfile,
+  getUsers,
+  updateUserRole,
+  banUser
 };

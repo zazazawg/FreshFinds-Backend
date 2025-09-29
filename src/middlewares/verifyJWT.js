@@ -1,4 +1,3 @@
-// src/middleware/verifyJWT.js
 import jwt from "jsonwebtoken";
 import ApiErr from "../utils/ApiErr.js";
 

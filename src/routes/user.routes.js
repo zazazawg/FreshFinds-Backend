@@ -1,16 +1,20 @@
 import { Router } from "express";
 import {
+  banUser,
   createOrder,
   createPaymentIntent,
   getUserOrders,
   getUserProfile,
+  getUsers,
   loginUser,
   logoutUser,
   registerUser,
   updateUserProfile,
+  updateUserRole,
 } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.js";
 import verifyFirebaseToken from "../middlewares/verifyFirebaseToken.js";
+import { verifyAdmin } from "../middlewares/verifyAdmin.js";
 
 const router = Router();
 
@@ -36,6 +40,12 @@ router.get("/orders/:userId", getUserOrders);
 router.get("/profile/:userId", getUserProfile);
 // update user profile
 router.put("/update/:userId", updateUserProfile);
+
+
+// for admin
+router.get("/admin",  getUsers);
+router.patch("/admin/:id/role",  updateUserRole);
+router.patch("/admin/:id/ban",  banUser);
 
 
 export default router;

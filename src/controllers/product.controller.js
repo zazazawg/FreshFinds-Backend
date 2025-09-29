@@ -359,34 +359,22 @@ const updateProductDetails = asyncHandler(async (req, res) => {
     data: product,
   });
 });
-const getAllProducts = asyncHandler(async (req, res) => {
-  const { category, page = 1, limit } = req.query; // <-- added defaults for page
+ const getAllProducts = asyncHandler(async (req, res) => {
+  const { category } = req.query;
 
   const filter = { applicationStatus: "approved" };
 
   if (category) {
     filter.category = category;
   }
+  const products = await Product.find(filter).sort({ createdAt: -1 });
 
-  const numericLimit = limit ? Number(limit) : null;
-
-  const skip = numericLimit ? (Number(page) - 1) * numericLimit : 0;
-
-  let query = Product.find(filter).sort({ createdAt: -1 }); 
-
-  if (numericLimit) {
-    query = query.skip(skip).limit(numericLimit);
-  }
-
-  const products = await query;
   const total = await Product.countDocuments(filter);
 
   res.status(200).json({
     message: "Approved products fetched successfully",
     data: products,
     total,
-    currentPage: Number(page),
-    totalPages: numericLimit ? Math.ceil(total / numericLimit) : 1, 
   });
 });
 const getProductById = asyncHandler(async (req, res) => {
