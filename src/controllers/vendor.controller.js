@@ -47,7 +47,7 @@ const applyVendor = async (req, res) => {
           uploadedImageURL = result.url; // Get the image URL from Cloudinary
         }
       } catch (error) {
-        console.error("Error uploading image:", error);
+        // console.error("Error uploading image:", error);
         return res.status(500).json({ message: "Error uploading image" });
       }
     }
@@ -74,7 +74,7 @@ const applyVendor = async (req, res) => {
       .json({ message: "Vendor application submitted successfully" });
   } catch (error) {
     // Handle any other errors and clean up if needed
-    console.error("Error submitting vendor application:", error);
+    // console.error("Error submitting vendor application:", error);
 
     // If an error happens after the file has been uploaded, clean up the uploaded file
     if (req.file && result) {
@@ -101,7 +101,7 @@ const getAllVendorApplications = asyncHandler(async (req, res) => {
       data: vendorApplications,
     });
   } catch (error) {
-    console.error("Error fetching vendor applications:", error);
+    // console.error("Error fetching vendor applications:", error);
     res.status(500).json({
       message: "Error fetching vendor applications",
     });
@@ -123,7 +123,7 @@ const getVendorApplications = asyncHandler(async (req, res) => {
       data: vendorApplications,
     });
   } catch (error) {
-    console.error("Error fetching vendor applications:", error);
+    // console.error("Error fetching vendor applications:", error);
     res.status(500).json({
       message: "Error fetching vendor applications",
     });

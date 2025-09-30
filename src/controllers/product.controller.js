@@ -50,7 +50,7 @@ const addProduct = asyncHandler(async (req, res) => {
       uploadedImageURL = result.optimizedUrl || result.url || result.secure_url || null;
       uploadedImagePublicId = result.publicId || result.public_id || null;
     } catch (uploadErr) {
-      console.error("Error uploading image:", uploadErr);
+      // console.error("Error uploading image:", uploadErr);
       throw new ApiErr("Error uploading image", 500);
     }
   }
@@ -73,7 +73,7 @@ const addProduct = asyncHandler(async (req, res) => {
 
     return res.status(201).json(new ApiRes(201, newProduct, "Product created successfully"));
   } catch (err) {
-    console.error("Error adding product:", err);
+    // console.error("Error adding product:", err);
     throw new ApiErr("Error adding product", 500);
   }
 });

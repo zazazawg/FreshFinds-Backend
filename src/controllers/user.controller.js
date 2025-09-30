@@ -35,15 +35,15 @@ const authenticateUser = asyncHandler(async (req, res) => {
   const { displayName } = req.body;
 
   // Debug logs
-  console.log("Request body:", req.body);
-  console.log("Request file:", req.file);
+  // console.log("Request body:", req.body);
+  // console.log("Request file:", req.file);
 
   let user = await User.findOne({ userId });
 
   if (user) {
-    console.log("Existing user logging in:", email);
+    // console.log("Existing user logging in:", email);
   } else {
-    console.log("New user signing up:", email);
+    // console.log("New user signing up:", email);
 
     const finalDisplayName = displayName || firebaseName || email.split("@")[0];
 
@@ -51,20 +51,20 @@ const authenticateUser = asyncHandler(async (req, res) => {
 
     // Handle file upload
     if (req.file) {
-      console.log("Uploading file:", req.file.path);
+      // console.log("Uploading file:", req.file.path);
       try {
         const result = await uploadOnCloudinary(req.file.path);
 
         // Fix: Use the correct property from your cloudinary response
         uploadedImageURL = result?.secureUrl || result?.optimizedUrl || null;
 
-        console.log("Cloudinary upload success:", uploadedImageURL);
+        // console.log("Cloudinary upload success:", uploadedImageURL);
       } catch (error) {
-        console.error("Cloudinary upload failed:", error);
+        // console.error("Cloudinary upload failed:", error);
       }
     }
 
-    console.log("Creating user with photoURL:", uploadedImageURL);
+    // console.log("Creating user with photoURL:", uploadedImageURL);
 
     user = await User.create({
       userId,
@@ -144,7 +144,7 @@ const createPaymentIntent = asyncHandler(async (req, res) => {
 
     res.status(200).json({ clientSecret: intent.client_secret });
   } catch (error) {
-    console.error("Stripe PaymentIntent Error:", error.message);
+    // console.error("Stripe PaymentIntent Error:", error.message);
     res.status(500).json({ error: error.message || "Payment creation failed" });
   }
 });
@@ -183,7 +183,7 @@ const createOrder = asyncHandler(async (req, res) => {
       .status(201)
       .json({ message: "Order saved successfully", order: newOrder });
   } catch (error) {
-    console.error("Order creation error:", error);
+    // console.error("Order creation error:", error);
     res.status(500).json({ error: "Failed to create order" });
   }
 });

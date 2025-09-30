@@ -11,7 +11,7 @@ const verifyFirebaseToken = asyncHandler(async (req, res, next) => {
   try {
     const decodedToken = await firebaseAdmin.auth().verifyIdToken(idToken);
     req.firebaseUser = decodedToken;
-    console.log('firebase id token verified');
+    // console.log('firebase id token verified');
     next();
   } catch (error) {
     throw new ApiErr("Invalid Firebase token", 403);
