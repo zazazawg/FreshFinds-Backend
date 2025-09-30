@@ -380,7 +380,12 @@ const updateProductDetails = asyncHandler(async (req, res) => {
 const getProductById = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const product = await Product.findById(id);
+  
+  const product = await Product.findById(id)
+    .populate({
+      path: "reviews.userId", 
+      select: "displayName email photoURL",
+    });
 
   if (!product) {
     res.status(404);
@@ -392,6 +397,75 @@ const getProductById = asyncHandler(async (req, res) => {
     data: product,
   });
 });
+
+// post a review on product
+const postProductReview = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const { rating, reviewText, userId } = req.body;
+
+  // Validate required fields
+  if (!productId || !rating || !userId) {
+    return res.status(400).json({
+      message: "Product ID, rating, and user ID are required",
+    });
+  }
+
+  // Validate rating range
+  if (rating < 1 || rating > 5) {
+    return res.status(400).json({
+      message: "Rating must be between 1 and 5",
+    });
+  }
+
+  // Find product
+  const product = await Product.findById(productId);
+  if (!product) {
+    return res.status(404).json({ message: "Product not found" });
+  }
+
+  // Check if user exists
+  const user = await User.findOne({ userId: userId });
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  // Check if user already reviewed
+  const existingReview = product.reviews.find(
+    (rev) => rev.userId.toString() === userId.toString()
+  );
+
+  let responseMessage;
+  if (existingReview) {
+    // Update existing review
+    existingReview.rating = rating;
+    existingReview.reviewText = reviewText || existingReview.reviewText;
+    existingReview.reviewDate = Date.now();
+    responseMessage = "Review updated successfully";
+  } else {
+    product.reviews.push({
+      userId:user._id,
+      rating,
+      reviewText,
+      reviewDate: Date.now(),
+    });
+    responseMessage = "Review added successfully";
+  }
+
+  await product.save();
+
+  // Return the updated review
+  const updatedReview = product.reviews.find(
+    (rev) => rev.userId.toString() === userId.toString()
+  );
+
+  return res.status(200).json({
+    message: responseMessage,
+    updatedReview, 
+  });
+});
+
+
+
 
 
 
@@ -407,5 +481,7 @@ export {
   deleteProduct,
   markProductActive,
   getAllProducts,
-  getProductById
+  getProductById,
+  postProductReview,
+
 };

@@ -8,6 +8,8 @@ import {
   refreshCookieOptions,
 } from "../config/cookies.js";
 import Stripe from "stripe";
+import Ad from "../models/ad.models.js";
+import Product from "../models/product.model.js";
 const stripe = new Stripe(process.env.PAYMENT_GATEWAY_KEY);
 
 const generateAccessAndRefreshToken = async (userId) => {
@@ -22,96 +24,79 @@ const generateAccessAndRefreshToken = async (userId) => {
     throw new ApiErr("Error generating tokens", 500);
   }
 };
-// Register User (Sign-Up)
-const registerUser = asyncHandler(async (req, res) => {
-  const firebaseUser = req.firebaseUser; // ✅ comes from middleware
-  const userId = firebaseUser.uid; // Trusted value
-  const email = firebaseUser.email; // Trusted value
+// auth.controller.js
+const authenticateUser = asyncHandler(async (req, res) => {
+  const firebaseUser = req.firebaseUser;
+  const userId = firebaseUser.uid;
+  const email = firebaseUser.email;
+  const firebaseName = firebaseUser.name || firebaseUser.displayName;
+  const firebasePhoto = firebaseUser.picture || firebaseUser.photoURL;
 
-  const { displayName } = req.body; // Safe additional field
-  console.log("Secure Firebase data:", firebaseUser);
+  const { displayName } = req.body;
 
-  if (!displayName) {
-    throw new ApiErr("Display name is required", 400);
-  }
-
-  const userExists = await User.findOne({ email });
-  if (userExists) {
-    throw new ApiErr("User already exists", 409);
-  }
-
-  let uploadedImageURL = null;
-  if (req.file) {
-    const result = await uploadOnCloudinary(req.file.path);
-    uploadedImageURL = result.url;
-  }
-
-  const newUser = await User.create({
-    userId,
-    email,
-    displayName,
-    photoURL: uploadedImageURL,
-    role: "user",
-  });
-
-  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
-    newUser._id
-  );
-
-  res.cookie("accessToken", accessToken, accessCookieOptions);
-  res.cookie("refreshToken", refreshToken, refreshCookieOptions);
-
-  const createdUser = await User.findById(newUser._id).select("-refreshToken");
-
-  return res
-    .status(201)
-    .json(
-      new ApiRes(
-        201,
-        { user: createdUser, accessToken },
-        "User registered successfully"
-      )
-    );
-});
-
-// Login User (Sign-In)
-const loginUser = asyncHandler(async (req, res) => {
-  const { userId } = req.body;
+  // Debug logs
   console.log("Request body:", req.body);
+  console.log("Request file:", req.file);
 
-  // Step 1: Validate if userId exists
-  if (!userId) {
-    throw new ApiErr("Firebase userId is required", 400);
+  let user = await User.findOne({ userId });
+
+  if (user) {
+    console.log("Existing user logging in:", email);
+  } else {
+    console.log("New user signing up:", email);
+
+    const finalDisplayName = displayName || firebaseName || email.split("@")[0];
+
+    let uploadedImageURL = firebasePhoto || null;
+
+    // Handle file upload
+    if (req.file) {
+      console.log("Uploading file:", req.file.path);
+      try {
+        const result = await uploadOnCloudinary(req.file.path);
+
+        // Fix: Use the correct property from your cloudinary response
+        uploadedImageURL = result?.secureUrl || result?.optimizedUrl || null;
+
+        console.log("Cloudinary upload success:", uploadedImageURL);
+      } catch (error) {
+        console.error("Cloudinary upload failed:", error);
+      }
+    }
+
+    console.log("Creating user with photoURL:", uploadedImageURL);
+
+    user = await User.create({
+      userId,
+      email,
+      displayName: finalDisplayName,
+      photoURL: uploadedImageURL,
+      role: "user",
+    });
   }
 
-  // Step 2: Check if the user exists in DB
-  const user = await User.findOne({ userId });
-  if (!user) {
-    throw new ApiErr("User not found", 404); // If user doesn't exist, throw error
-  }
-
-  // Step 3: Generate access and refresh tokens
   const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
     user._id
   );
 
-  // Step 4: Set tokens in cookies
   res.cookie("accessToken", accessToken, accessCookieOptions);
   res.cookie("refreshToken", refreshToken, refreshCookieOptions);
 
-  // Step 5: Return logged-in user data without refreshToken
-  const loggedInUser = await User.findById(user._id).select("-refreshToken");
-
-  return res.status(200).json(
-    new ApiRes(
-      200,
-      {
-        user: loggedInUser,
-        accessToken, // Return access token if needed
-      },
-      "User logged in successfully"
-    )
+  const authenticatedUser = await User.findById(user._id).select(
+    "-refreshToken"
   );
+
+  return res
+    .status(200)
+    .json(
+      new ApiRes(
+        200,
+        { user: authenticatedUser, accessToken },
+        user.createdAt === user.updatedAt
+          ? "User registered successfully"
+          : "User logged in successfully"
+      )
+    );
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
@@ -120,6 +105,25 @@ const logoutUser = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(new ApiRes(200, {}, "User logged out successfully"));
+});
+// GET MongoDB ObjectId by Firebase UID
+export const getMongoIdByFirebaseUid = asyncHandler(async (req, res) => {
+  const { firebaseUid } = req.params;
+
+  if (!firebaseUid) {
+    return res.status(400).json({ message: "Firebase UID is required" });
+  }
+
+  const user = await User.findOne({ userId: firebaseUid });
+
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  res.status(200).json({
+    mongoId: user._id,
+    user,
+  });
 });
 
 const createPaymentIntent = asyncHandler(async (req, res) => {
@@ -186,26 +190,26 @@ const createOrder = asyncHandler(async (req, res) => {
 // Get user orders
 const getUserOrders = asyncHandler(async (req, res) => {
   const { userId } = req.params;
-  console.log("Request params:", userId);
 
   try {
     const user = await User.findOne({ userId })
-      .populate("orders.orderItems.productId");
+      .populate("orders.orderItems.productId")
+      .select("orders")
+      .sort({ "orders.createdAt": -1 });
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    if (!user.orders || user.orders.length === 0) {
-      return res.status(404).json({ message: "No orders found for this user" });
-    }
+    
 
-    res.status(200).json(user.orders);
+    res.status(200).json(user.orders); // Return all orders, sorted by createdAt in descending order
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
-// get user profile 
+
+// get user profile
 const getUserProfile = asyncHandler(async (req, res) => {
   const { userId } = req.params;
 
@@ -218,21 +222,17 @@ const getUserProfile = asyncHandler(async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    if (!user.orders || user.orders.length === 0) {
-      return res.status(404).json({ message: "No orders found for this user" });
-    }
-
+    // Return user profile, even if orders array is empty
     res.status(200).json(user);
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
-
 // Update profile
- const updateUserProfile = async (req, res) => {
+const updateUserProfile = async (req, res) => {
   try {
-    const { userId } = req.params; 
+    const { userId } = req.params;
     const { displayName, photoURL } = req.body;
 
     const updatedUser = await User.findOneAndUpdate(
@@ -253,11 +253,12 @@ const getUserProfile = asyncHandler(async (req, res) => {
   }
 };
 
-
+////////////////////
 // admin controllers
+////////////////////
 
 // Get users
- const getUsers = asyncHandler(async (req, res) => {
+const getUsers = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search = "" } = req.query;
 
   const query = {
@@ -283,11 +284,11 @@ const getUserProfile = asyncHandler(async (req, res) => {
 });
 
 // Change user role
- const updateUserRole = asyncHandler(async (req, res) => {
+const updateUserRole = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { role } = req.body; // user, vendor, admin
 
-  const user = await User.findOne({userId: id});
+  const user = await User.findOne({ userId: id });
   if (!user) return res.status(404).json({ message: "User not found" });
 
   user.role = role;
@@ -297,11 +298,11 @@ const getUserProfile = asyncHandler(async (req, res) => {
 });
 
 // Ban / Unban user
- const banUser = asyncHandler(async (req, res) => {
+const banUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { ban, reason } = req.body;
 
-  const user = await User.findOne({userId: id});
+  const user = await User.findOne({ userId: id });
   if (!user) return res.status(404).json({ message: "User not found" });
 
   user.banned = ban;
@@ -314,10 +315,41 @@ const getUserProfile = asyncHandler(async (req, res) => {
 });
 
 
+// Admin dashboard stats
+const getAdminStats = asyncHandler(async (req, res) => {
+  try {
+    const totalUsers = await User.countDocuments({ role: "user" });
+    const totalVendors = await User.countDocuments({ role: "vendor" });
+    const totalAdmins = await User.countDocuments({ role: "admin" });
+    const totalProducts = await Product.countDocuments();
+    const pendingProducts = await Product.countDocuments({
+      applicationStatus: "pending",
+    });
+    const approvedProducts = await Product.countDocuments({
+      applicationStatus: "approved",
+    });
+    const totalAds = await Ad.countDocuments();
+    const pendingAds = await Ad.countDocuments({ status: "pending" });
+    const approvedAds = await Ad.countDocuments({ status: "approved" });
+
+    res.json({
+      totalUsers,
+      totalVendors,
+      totalAdmins,
+      totalProducts,
+      pendingProducts,
+      approvedProducts,
+      totalAds,
+      pendingAds,
+      approvedAds,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 export {
-  registerUser,
-  loginUser,
+  authenticateUser,
   logoutUser,
   createOrder,
   createPaymentIntent,
@@ -326,5 +358,6 @@ export {
   updateUserProfile,
   getUsers,
   updateUserRole,
-  banUser
+  banUser,
+  getAdminStats,
 };

@@ -1,4 +1,6 @@
 // controllers/vendorController.js
+import Ad from "../models/ad.models.js";
+import Product from "../models/product.model.js";
 import User from "../models/user.model.js";
 import Vendor from "../models/vendor.model.js";
 import ApiErr from "../utils/ApiErr.js";
@@ -128,7 +130,7 @@ const getVendorApplications = asyncHandler(async (req, res) => {
   }
 });
 // handle vendor application
-export const handleVendorApplication = async (req, res) => {
+ const handleVendorApplication = async (req, res) => {
   const { applicationId, action } = req.body;
 
   // Find the vendor application by ID
@@ -155,6 +157,57 @@ export const handleVendorApplication = async (req, res) => {
     .status(200)
     .json({ message: "Vendor application updated successfully" });
 };
+// vendor recent orders(dashboard stats)
+const getVendorRecentOrders = asyncHandler(async (req, res) => {
+  try {
+    const vendorId = req.user._id;
+
+    const orders = await User.aggregate([
+      { $unwind: "$orders" },
+      { $unwind: "$orders.orderItems" },
+      { $match: { "orders.orderItems.vendorId": vendorId } },
+      { $sort: { "orders.orderDate": -1 } },
+      { $limit: 5 },
+      {
+        $project: {
+          orderId: "$orders.orderId",
+          productId: "$orders.orderItems.productId",
+          quantity: "$orders.orderItems.quantity",
+          totalAmount: "$orders.totalAmount",
+          orderDate: "$orders.orderDate",
+          status: "$orders.status",
+        },
+      },
+    ]);
+
+    res.json(orders);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+})
+const getVendorStats =asyncHandler(async (req, res) => {
+  try {
+    const {vendorId} = req.params;
+
+    const totalProducts = await Product.countDocuments({ vendorId });
+    const pendingProducts = await Product.countDocuments({ vendorId, applicationStatus: "pending" });
+    const approvedProducts = await Product.countDocuments({ vendorId, applicationStatus: "approved" });
+    const totalAds = await Ad.countDocuments({ vendor: vendorId });
+    const pendingAds = await Ad.countDocuments({ vendor: vendorId, status: "pending" });
+    const approvedAds = await Ad.countDocuments({ vendor: vendorId, status: "approved" });
+
+    res.json({
+      totalProducts,
+      pendingProducts,
+      approvedProducts,
+      totalAds,
+      pendingAds,
+      approvedAds,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+})
 
 
 
@@ -162,4 +215,8 @@ export {
   applyVendor,
   getAllVendorApplications,
   getVendorApplications,
+  handleVendorApplication,
+  getVendorRecentOrders,
+  getVendorStats
+
 };

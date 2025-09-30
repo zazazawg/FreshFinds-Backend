@@ -5,6 +5,8 @@ import {
   applyVendor,
   getAllVendorApplications,
   getVendorApplications,
+  getVendorRecentOrders,
+  getVendorStats,
   handleVendorApplication,
 } from "../controllers/vendor.controller.js";
 
@@ -25,6 +27,9 @@ router.get("/applications", getVendorApplications);
 // Handle approve/reject vendor application
 router.put("/application", handleVendorApplication);
 
+// vendor dashboard recent orders
+router.get("/recent-orders",verifyFirebaseToken,getVendorRecentOrders)
 
+router.get("/stats/:vendorId", getVendorStats);
 
 export default router;

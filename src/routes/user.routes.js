@@ -1,14 +1,14 @@
 import { Router } from "express";
 import {
+  authenticateUser,
   banUser,
   createOrder,
   createPaymentIntent,
+  getAdminStats,
   getUserOrders,
   getUserProfile,
   getUsers,
-  loginUser,
   logoutUser,
-  registerUser,
   updateUserProfile,
   updateUserRole,
 } from "../controllers/user.controller.js";
@@ -17,16 +17,8 @@ import verifyFirebaseToken from "../middlewares/verifyFirebaseToken.js";
 import { verifyAdmin } from "../middlewares/verifyAdmin.js";
 
 const router = Router();
-
-// Sign up
-router.post(
-  "/signup",
-  verifyFirebaseToken,
-  upload.single("photoURL"),
-  registerUser
-);
-// Sign in
-router.post("/signin", verifyFirebaseToken, loginUser);
+// auth
+router.post("/auth", verifyFirebaseToken, upload.single("photoURL"), authenticateUser);
 // sign out
 router.post("/signout", logoutUser);
 
@@ -43,9 +35,10 @@ router.put("/update/:userId", updateUserProfile);
 
 
 // for admin
-router.get("/admin",  getUsers);
-router.patch("/admin/:id/role",  updateUserRole);
-router.patch("/admin/:id/ban",  banUser);
+router.get("/admin/stats",  getAdminStats );
+router.get("/admin", getUsers);
+router.patch("/admin/:id/role",updateUserRole);
+router.patch("/admin/:id/ban", banUser);
 
 
 export default router;

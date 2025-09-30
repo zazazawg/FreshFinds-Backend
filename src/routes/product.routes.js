@@ -12,6 +12,7 @@ import {
   getVendorProducts,
   markProductActive,
   markProductOutOfStock,
+  postProductReview,
   updateProductDetails,
   updateProductPrice,
 } from "../controllers/product.controller.js";
@@ -50,7 +51,8 @@ router.get("/:id", getProductById);
 // update product price
 router.put("/:productId/price", updateProductPrice);
 
-
+// review product
+router.post("/review/:productId",postProductReview);
 
 
 
@@ -59,5 +61,6 @@ router.put("/:productId/price", updateProductPrice);
 
 //  update product details
 router.put("/:productId", updateProductDetails);
+
 
 export default router;
