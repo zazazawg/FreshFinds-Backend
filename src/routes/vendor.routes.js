@@ -15,7 +15,6 @@ const router = Router();
 //vendor routes
 router.post(
   "/apply",
-  verifyFirebaseToken,
   upload.single("coverPhoto"),
   applyVendor
 );

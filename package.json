@@ -22,7 +22,7 @@
     "mongoose-aggregate-paginate-v2": "^1.1.4",
     "multer": "^2.0.2",
     "serverless-http": "^4.0.0",
-    "streamifier": "^0.1.1",
+    "streamifier": "^0.0.2",
     "stripe": "^18.5.0"
   }
 }

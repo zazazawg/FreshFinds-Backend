@@ -3,8 +3,6 @@ import Ad from "../models/ad.models.js";
 import Product from "../models/product.model.js";
 import User from "../models/user.model.js";
 import Vendor from "../models/vendor.model.js";
-import ApiErr from "../utils/ApiErr.js";
-import ApiRes from "../utils/ApiRes.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import uploadOnCloudinary from "../utils/cloudinary.js";
 
@@ -12,14 +10,11 @@ import uploadOnCloudinary from "../utils/cloudinary.js";
 const applyVendor = async (req, res) => {
   const { businessName, marketLocation, marketDescription, vendorPhone, uid } =
     req.body;
-  const userId = req.firebaseUser.uid; // Firebase User ID (from token)
 
   try {
     // Find the user in the User model
-    const user = await User.findOne({ userId });
-    if (userId !== uid) {
-      return res.status(404).json({ message: "Unauthorized" });
-    }
+    const user = await User.findOne({ userId: uid });
+    
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -36,21 +31,23 @@ const applyVendor = async (req, res) => {
         .json({ message: "You have already submitted an application" });
     }
 
-    // Handle the image upload only if everything is valid
-    let uploadedImageURL = null;
     let result = null;
-
-    if (req.file) {
-      try {
-        result = await uploadOnCloudinary(req.file?.path); // Upload image to Cloudinary
-        if (result) {
-          uploadedImageURL = result.url; // Get the image URL from Cloudinary
-        }
-      } catch (error) {
-        // console.error("Error uploading image:", error);
-        return res.status(500).json({ message: "Error uploading image" });
-      }
+if (req.file) {
+  try {
+    result = await uploadOnCloudinary(req.file?.path);
+    if (result) {
+      uploadedImageURL = result.url; 
     }
+  } catch (error) {
+    console.error("Error uploading image:", error);
+    return res.status(500).json({ message: "Error uploading image" });
+  }
+}
+if (!req.file) {
+  return res.status(400).json({ message: "Cover photo is required" });
+}
+
+
 
     // Create a new VendorApplication entry if image upload succeeds
     const newApplication = new Vendor({
@@ -73,16 +70,12 @@ const applyVendor = async (req, res) => {
       .status(201)
       .json({ message: "Vendor application submitted successfully" });
   } catch (error) {
-    // Handle any other errors and clean up if needed
-    // console.error("Error submitting vendor application:", error);
 
-    // If an error happens after the file has been uploaded, clean up the uploaded file
     if (req.file && result) {
-      // If you want to delete the file from Cloudinary in case of failure
       await cloudinary.uploader.destroy(result.public_id);
     }
 
-    res.status(500).json({ message: "Error submitting vendor application" });
+    res.status(500).json({ message: "Error submitting vendor application", error: error.message });
   }
 };
 // get all vendor applications

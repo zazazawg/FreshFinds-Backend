@@ -34,38 +34,31 @@ const authenticateUser = asyncHandler(async (req, res) => {
 
   const { displayName } = req.body;
 
-  // Debug logs
-  // console.log("Request body:", req.body);
-  // console.log("Request file:", req.file);
-
   let user = await User.findOne({ userId });
 
+  // Check if the user already exists
   if (user) {
-    // console.log("Existing user logging in:", email);
+    console.log("Existing user logging in:", email);
   } else {
-    // console.log("New user signing up:", email);
+    console.log("New user signing up:", email);
 
     const finalDisplayName = displayName || firebaseName || email.split("@")[0];
+    let uploadedImageURL = firebasePhoto || null; // Set Firebase photo URL initially
 
-    let uploadedImageURL = firebasePhoto || null;
-
-    // Handle file upload
+    // Handle file upload if a file exists
     if (req.file) {
-      // console.log("Uploading file:", req.file.path);
       try {
-        const result = await uploadOnCloudinary(req.file.path);
-
-        // Fix: Use the correct property from your cloudinary response
-        uploadedImageURL = result?.secureUrl || result?.optimizedUrl || null;
-
-        // console.log("Cloudinary upload success:", uploadedImageURL);
+        // Direct upload to Cloudinary using the file buffer (as you're using memory storage)
+        const result = await uploadOnCloudinary(req.file.buffer, `user-${userId}-profile`);
+        
+        // If file uploaded successfully, use the returned URL
+        uploadedImageURL = result?.secure_url || result?.url;
       } catch (error) {
-        // console.error("Cloudinary upload failed:", error);
+        console.error("Cloudinary upload failed:", error);
       }
     }
 
-    // console.log("Creating user with photoURL:", uploadedImageURL);
-
+    // Create new user if not found in the database
     user = await User.create({
       userId,
       email,
@@ -75,29 +68,21 @@ const authenticateUser = asyncHandler(async (req, res) => {
     });
   }
 
-  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
-    user._id
-  );
+  // Generate JWT tokens for the authenticated user
+  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
 
-  res.cookie("accessToken", accessToken, accessCookieOptions);
+  res.cookie("accessToken", accessToken, accessCookieOptions); // Set cookies
   res.cookie("refreshToken", refreshToken, refreshCookieOptions);
 
-  const authenticatedUser = await User.findById(user._id).select(
-    "-refreshToken"
-  );
+  const authenticatedUser = await User.findById(user._id).select("-refreshToken"); // Don't return refreshToken
 
-  return res
-    .status(200)
-    .json(
-      new ApiRes(
-        200,
-        { user: authenticatedUser, accessToken },
-        user.createdAt === user.updatedAt
-          ? "User registered successfully"
-          : "User logged in successfully"
-      )
-    );
+  return res.status(200).json({
+    message: user.createdAt === user.updatedAt ? "User registered successfully" : "User logged in successfully",
+    user: authenticatedUser,
+    accessToken,
+  });
 });
+
 
 const logoutUser = asyncHandler(async (req, res) => {
   res.clearCookie("accessToken", accessCookieOptions);

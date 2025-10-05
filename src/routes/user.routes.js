@@ -14,7 +14,6 @@ import {
 } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.js";
 import verifyFirebaseToken from "../middlewares/verifyFirebaseToken.js";
-import { verifyAdmin } from "../middlewares/verifyAdmin.js";
 
 const router = Router();
 // auth
