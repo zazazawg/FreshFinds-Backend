@@ -1,7 +1,7 @@
 import User from "../models/user.model.js";
 import ApiRes from "../utils/ApiRes.js";
 import asyncHandler from "../utils/asyncHandler.js";
-import uploadOnCloudinary from "../utils/cloudinary.js";
+import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 import ApiErr from "../utils/ApiErr.js";
 import {
   accessCookieOptions,
@@ -36,29 +36,26 @@ const authenticateUser = asyncHandler(async (req, res) => {
 
   let user = await User.findOne({ userId });
 
-  // Check if the user already exists
   if (user) {
     console.log("Existing user logging in:", email);
   } else {
     console.log("New user signing up:", email);
 
     const finalDisplayName = displayName || firebaseName || email.split("@")[0];
-    let uploadedImageURL = firebasePhoto || null; // Set Firebase photo URL initially
+    let uploadedImageURL = firebasePhoto || null;
 
-    // Handle file upload if a file exists
     if (req.file) {
       try {
-        // Direct upload to Cloudinary using the file buffer (as you're using memory storage)
-        const result = await uploadOnCloudinary(req.file.buffer, `user-${userId}-profile`);
-        
-        // If file uploaded successfully, use the returned URL
-        uploadedImageURL = result?.secure_url || result?.url;
+        const result = await uploadBufferToCloudinary(
+          req.file.buffer,
+          `user-${userId}-profile`
+        );
+        uploadedImageURL = result?.secureUrl || result?.originalUrl;
       } catch (error) {
         console.error("Cloudinary upload failed:", error);
       }
     }
 
-    // Create new user if not found in the database
     user = await User.create({
       userId,
       email,
@@ -68,16 +65,19 @@ const authenticateUser = asyncHandler(async (req, res) => {
     });
   }
 
-  // Generate JWT tokens for the authenticated user
-  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
+  const { accessToken, refreshToken } =
+    await generateAccessAndRefreshToken(user._id);
 
-  res.cookie("accessToken", accessToken, accessCookieOptions); // Set cookies
+  res.cookie("accessToken", accessToken, accessCookieOptions);
   res.cookie("refreshToken", refreshToken, refreshCookieOptions);
 
-  const authenticatedUser = await User.findById(user._id).select("-refreshToken"); // Don't return refreshToken
+  const authenticatedUser = await User.findById(user._id).select("-refreshToken");
 
   return res.status(200).json({
-    message: user.createdAt === user.updatedAt ? "User registered successfully" : "User logged in successfully",
+    message:
+      user.createdAt === user.updatedAt
+        ? "User registered successfully"
+        : "User logged in successfully",
     user: authenticatedUser,
     accessToken,
   });
@@ -185,8 +185,6 @@ const getUserOrders = asyncHandler(async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-
-    
 
     res.status(200).json(user.orders); // Return all orders, sorted by createdAt in descending order
   } catch (error) {
@@ -298,7 +296,6 @@ const banUser = asyncHandler(async (req, res) => {
 
   res.json({ message: `User ${ban ? "banned" : "unbanned"}`, data: user });
 });
-
 
 // Admin dashboard stats
 const getAdminStats = asyncHandler(async (req, res) => {

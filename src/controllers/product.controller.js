@@ -3,17 +3,15 @@ import User from "../models/user.model.js";
 import ApiErr from "../utils/ApiErr.js";
 import ApiRes from "../utils/ApiRes.js";
 import asyncHandler from "../utils/asyncHandler.js";
-import uploadOnCloudinary from "../utils/cloudinary.js";
+import  { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 
 const addProduct = asyncHandler(async (req, res) => {
   const { name, description, price, stock, category, vendorId } = req.body;
 
-  // Basic required field validation
   if (!name || !description || !price || !stock || !category || !vendorId) {
     throw new ApiErr("All fields are required", 400);
   }
 
-  // Parse numeric fields
   const priceNum = parseFloat(price);
   const stockNum = parseInt(stock, 10);
 
@@ -24,33 +22,34 @@ const addProduct = asyncHandler(async (req, res) => {
     throw new ApiErr("Stock must be a non-negative integer", 400);
   }
 
-  // Find vendor by firebase userId stored in user.userId
   const vendor = await User.findOne({ userId: vendorId });
   if (!vendor) {
     throw new ApiErr("Vendor not found", 404);
   }
 
-  // Only vendors (and optionally admins) may add products
   if (vendor.role !== "vendor" && vendor.role !== "admin") {
     throw new ApiErr("Only vendors can add products", 403);
   }
 
-  // Handle file upload (optional)
   let uploadedImageURL = null;
   let uploadedImagePublicId = null;
 
   if (req.file) {
     try {
-      const result = await uploadOnCloudinary(req.file.path);
+      const result = await uploadBufferToCloudinary(
+        req.file.buffer,
+        `product-${vendor._id}-${Date.now()}`
+      );
+
       if (!result) {
-        // uploadOnCloudinary returns null on failure
         throw new ApiErr("Image upload failed", 500);
       }
-      // prefer optimizedUrl if available
-      uploadedImageURL = result.optimizedUrl || result.url || result.secure_url || null;
+
+      uploadedImageURL =
+        result.optimizedUrl || result.secureUrl || result.originalUrl || null;
       uploadedImagePublicId = result.publicId || result.public_id || null;
-    } catch (uploadErr) {
-      // console.error("Error uploading image:", uploadErr);
+    } catch (err) {
+      console.error("Error uploading image:", err);
       throw new ApiErr("Error uploading image", 500);
     }
   }
@@ -68,12 +67,13 @@ const addProduct = asyncHandler(async (req, res) => {
       productImage: uploadedImageURL,
       productImagePublicId: uploadedImagePublicId,
       applicationStatus: "pending",
-      // add other defaults if needed (availabilityStatus, tags, etc.)
     });
 
-    return res.status(201).json(new ApiRes(201, newProduct, "Product created successfully"));
+    return res
+      .status(201)
+      .json(new ApiRes(201, newProduct, "Product created successfully"));
   } catch (err) {
-    // console.error("Error adding product:", err);
+    console.error("Error adding product:", err);
     throw new ApiErr("Error adding product", 500);
   }
 });

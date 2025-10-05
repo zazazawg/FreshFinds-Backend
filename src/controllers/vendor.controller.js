@@ -4,7 +4,7 @@ import Product from "../models/product.model.js";
 import User from "../models/user.model.js";
 import Vendor from "../models/vendor.model.js";
 import asyncHandler from "../utils/asyncHandler.js";
-import uploadOnCloudinary from "../utils/cloudinary.js";
+import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 
 // Apply for vendor
 const applyVendor = async (req, res) => {
@@ -12,9 +12,7 @@ const applyVendor = async (req, res) => {
     req.body;
 
   try {
-    // Find the user in the User model
     const user = await User.findOne({ userId: uid });
-    
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -31,25 +29,24 @@ const applyVendor = async (req, res) => {
         .json({ message: "You have already submitted an application" });
     }
 
-    let result = null;
-if (req.file) {
-  try {
-    result = await uploadOnCloudinary(req.file?.path);
-    if (result) {
-      uploadedImageURL = result.url; 
+    if (!req.file) {
+      return res.status(400).json({ message: "Cover photo is required" });
     }
-  } catch (error) {
-    console.error("Error uploading image:", error);
-    return res.status(500).json({ message: "Error uploading image" });
-  }
-}
-if (!req.file) {
-  return res.status(400).json({ message: "Cover photo is required" });
-}
 
+    let uploadedImageURL = null;
+    let result = null;
 
+    try {
+      result = await uploadBufferToCloudinary(
+        req.file.buffer,
+        `vendor-${user._id}-cover`
+      );
+      uploadedImageURL = result?.secureUrl || result?.originalUrl;
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      return res.status(500).json({ message: "Error uploading image" });
+    }
 
-    // Create a new VendorApplication entry if image upload succeeds
     const newApplication = new Vendor({
       vendorId: user._id,
       vendorName: user.displayName,
@@ -62,20 +59,16 @@ if (!req.file) {
       applicationStatus: "pending",
     });
 
-    // Save the application to the database
     await newApplication.save();
 
-    // Respond with success message
-    res
+    return res
       .status(201)
       .json({ message: "Vendor application submitted successfully" });
   } catch (error) {
-
-    if (req.file && result) {
-      await cloudinary.uploader.destroy(result.public_id);
-    }
-
-    res.status(500).json({ message: "Error submitting vendor application", error: error.message });
+    console.error("Vendor application error:", error);
+    return res
+      .status(500)
+      .json({ message: "Error submitting vendor application" });
   }
 };
 // get all vendor applications

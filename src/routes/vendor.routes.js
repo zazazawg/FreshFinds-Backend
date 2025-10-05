@@ -15,7 +15,7 @@ const router = Router();
 //vendor routes
 router.post(
   "/apply",
-  upload.single("coverPhoto"),
+  upload.single("coverPhoto"),  
   applyVendor
 );
     // vendor application routes
